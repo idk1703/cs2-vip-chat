@@ -1,0 +1,45 @@
+version: 25
+imports:
+- projectPath: idk1703
+  revision: launch-agent
+  accessTokenSecret: onedev-at
+jobs:
+- name: CI Linux
+  jobExecutor: circleci-linux
+  steps:
+  - !CheckoutStep
+    name: Checkout Code
+    cloneCredential: !DefaultCredential {}
+    withLfs: false
+    withSubmodules: true
+    cloneDepth: 1
+    checkoutPath: '@project_name@'
+    condition: ALL_PREVIOUS_STEPS_WERE_SUCCESSFUL
+  - !CommandStep
+    name: Compile
+    runInContainer: true
+    image: idk1703/build-environment:11
+    interpreter: !DefaultInterpreter
+      commands:
+      - git clone --depth 1 -b cs2  https://github.com/alliedmodders/hl2sdk.git hl2sdk-cs2
+      - git clone --depth 1 -b master https://github.com/alliedmodders/metamod-source.git metamod-source
+      - cd @project_name@
+      - python3 configure.py --enable-optimize --symbol-files --sdks=cs2 --targets=x86_64
+      - ambuild objdir
+      - cd ..
+      - tar -czf @project_name@-@script:short-hash@-@build_number@.tar.gz -C @project_name@/objdir/package $(ls -A @project_name@/objdir/package)
+    useTTY: true
+    condition: ALL_PREVIOUS_STEPS_WERE_SUCCESSFUL
+  - !PublishArtifactStep
+    name: Upload artifacts
+    artifacts: '*.tar.gz'
+    condition: ALL_PREVIOUS_STEPS_WERE_SUCCESSFUL
+  triggers:
+  - !BranchUpdateTrigger {}
+  jobDependencies:
+  - jobName: Launch Agent
+    requireSuccessful: true
+  retryCondition: never
+  maxRetries: 3
+  retryDelay: 30
+  timeout: 3600
